@@ -26,8 +26,13 @@
 
 // Include platform-specific BLE libraries
 #if defined(ARDUINO_ARCH_ESP32)
-#include <BLEDevice.h>
-#include <BLEClient.h>
+    // Arduino framework - use Arduino BLE library
+    #include <BLEDevice.h>
+    #include <BLEClient.h>
+#elif defined(ESP_PLATFORM)
+    // ESP-IDF framework - use esp-nimble-cpp library
+    // NimBLE provides compatibility aliases that match Arduino BLE API
+    #include <NimBLEDevice.h>
 #endif
 
 // Debugging switches
@@ -47,9 +52,9 @@ BluetoothTransport::BluetoothTransport(const char* mac)
     // Initialize the buffer to zeros
     memset(_resp_buffer, 0, MAX_RESP_SIZE);
 
-    // Initialize BLE client - platform-specific code
-#if defined(ARDUINO_ARCH_ESP32)
-    // ESP32 BLE initialization
+    // Initialize BLE client - works for both Arduino and ESP-IDF (via NimBLE compatibility)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+    // ESP32 BLE initialization (same API for Arduino and ESP-IDF with NimBLE)
     BLEDevice::init("RadiaCode Client");
     BLEClient* pClient = BLEDevice::createClient();
 
@@ -160,7 +165,7 @@ BluetoothTransport::BluetoothTransport(const char* mac)
         _peripheral = nullptr;
     }
 #else
-    _peripheral = nullptr; // Would be initialized with actual BLE connection
+    _peripheral = nullptr; // Fallback for unsupported platforms
 #endif
 #else
     Serial.println("Bluetooth not supported on this platform");
@@ -170,8 +175,8 @@ BluetoothTransport::BluetoothTransport(const char* mac)
 BluetoothTransport::~BluetoothTransport(void)
 {
 #ifdef BT_SUPPORT_ENABLED
-    // Clean up BLE resources - platform-specific code
-#if defined(ARDUINO_ARCH_ESP32)
+    // Clean up BLE resources - works for both Arduino and ESP-IDF (via NimBLE compatibility)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
     if (_peripheral != nullptr)
     {
         BLEClient* pClient = (BLEClient*)_peripheral;
@@ -201,8 +206,8 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
     _resp_size = 0;
     _response_ready = false;
 
-    // Send request in chunks - platform-specific code
-#if defined(ARDUINO_ARCH_ESP32)
+    // Send request in chunks - works for both Arduino and ESP-IDF (via NimBLE compatibility)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
     BLEClient* pClient = (BLEClient*)_peripheral;
     BLEUUID writeUUID("e63215e6-7003-49d8-96b0-b024798fb901");
     BLERemoteService* pService = pClient->getService(BLEUUID("e63215e5-7003-49d8-96b0-b024798fb901"));
