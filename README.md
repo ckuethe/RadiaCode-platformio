@@ -50,16 +50,16 @@ lib_deps =
 ```
 
 #### Using PlatformIO with ESP-IDF Framework
-Add to your `platformio.ini`:
+The library uses Arduino APIs for convenience. When using ESP-IDF, include Arduino as a component:
 ```ini
 [env:espidf-esp32]
 platform = espressif32
-framework = espidf
+framework = espidf, arduino
 lib_deps = 
     h2zero/esp-nimble-cpp@^2.0.0
 ```
 
-And reference the library as an ESP-IDF component (see the [PlatformIO-ESPIDF example](examples/PlatformIO-ESPIDF/)).
+Reference the library as an ESP-IDF component (see the [PlatformIO-ESPIDF example](examples/PlatformIO-ESPIDF/)).
 
 #### Manual Installation
 1. Download this repository as a ZIP file
@@ -204,16 +204,25 @@ The library is optimized for ESP32 and other microcontrollers with limited memor
 The library automatically detects the framework at compile time:
 
 - **Arduino Framework**: Uses Arduino BLE library (`BLEDevice.h`)
-- **ESP-IDF Framework**: Uses esp-nimble-cpp library (`NimBLEDevice.h`)
+- **ESP-IDF Framework**: Uses esp-nimble-cpp library (`NimBLEDevice.h`) with Arduino as an ESP-IDF component
 
 The esp-nimble-cpp library provides API compatibility aliases that match the Arduino BLE API, allowing the same code to work across both frameworks with minimal changes.
+
+### Hybrid Approach for ESP-IDF
+
+When using ESP-IDF, the library takes a hybrid approach by including Arduino as an ESP-IDF component. This provides:
+- Full access to ESP-IDF features and components
+- Arduino API compatibility (String, Serial, etc.)
+- Simplified code that works across frameworks
+
+In PlatformIO, specify both frameworks: `framework = espidf, arduino`
 
 ### Component Structure
 
 For ESP-IDF integration, the library includes:
 
 - `idf_component.yml` - ESP-IDF component manifest with dependencies
-- `CMakeLists.txt` - Build configuration that detects ESP-IDF vs standard builds
+- `CMakeLists.txt` - Build configuration that detects ESP-IDF vs standard builds and optionally includes Arduino
 - `library.json` - PlatformIO library manifest for multi-framework support
 
 The library automatically includes `esp-nimble-cpp` as a dependency when used as an ESP-IDF component.

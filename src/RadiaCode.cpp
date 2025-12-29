@@ -54,7 +54,7 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
     _spectrum_format_version = 0;
 
     // Check if bluetooth is supported on this platform
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
     _bt_supported = true;
 #else
     _bt_supported = false;
@@ -65,7 +65,7 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
     {
         if (bluetooth_mac != nullptr && _bt_supported)
         {
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
             _connection = new BluetoothTransport(bluetooth_mac);
 #endif
         }

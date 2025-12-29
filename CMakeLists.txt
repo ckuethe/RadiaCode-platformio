@@ -6,6 +6,22 @@ cmake_minimum_required(VERSION 3.5)
 
 if(ESP_PLATFORM)
 	# Build RadiaCode as an ESP-IDF component
+	
+	# List of private requirements (dependencies)
+	list(APPEND RADIACODE_PRIV_REQUIRES esp-nimble-cpp)
+	
+	# Check for Arduino framework as an ESP-IDF component
+	# Arduino install using IDF component manager
+	if(__COMPONENT_TARGETS MATCHES "___idf_espressif__arduino-esp32")
+		list(APPEND RADIACODE_PRIV_REQUIRES arduino-esp32)
+	# Manual installation of Arduino framework
+	elseif(__COMPONENT_TARGETS MATCHES "__idf_arduino")
+		list(APPEND RADIACODE_PRIV_REQUIRES arduino)
+	# PlatformIO
+	elseif(__COMPONENT_TARGETS MATCHES "___idf_framework-arduinoespressif32")
+		list(APPEND RADIACODE_PRIV_REQUIRES framework-arduinoespressif32)
+	endif()
+	
 	idf_component_register(
 		SRCS
 			"src/BluetoothTransport.cpp"
@@ -16,7 +32,7 @@ if(ESP_PLATFORM)
 		INCLUDE_DIRS
 			"src"
 		PRIV_REQUIRES
-			esp-nimble-cpp
+			${RADIACODE_PRIV_REQUIRES}
 	)
 	return()
 endif()
