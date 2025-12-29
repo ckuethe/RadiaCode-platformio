@@ -1,2 +1,0 @@
-/usr/bin/ar qc libRadiaCode.a CMakeFiles/RadiaCode.dir/src/BluetoothTransport.cpp.o CMakeFiles/RadiaCode.dir/src/BytesBuffer.cpp.o CMakeFiles/RadiaCode.dir/src/Decoders.cpp.o CMakeFiles/RadiaCode.dir/src/RadiaCode.cpp.o CMakeFiles/RadiaCode.dir/src/RadiaCodeTypes.cpp.o
-/usr/bin/ranlib libRadiaCode.a
