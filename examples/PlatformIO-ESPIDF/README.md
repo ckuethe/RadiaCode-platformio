@@ -446,8 +446,6 @@ If you encounter issues:
 3. Open an issue on the [GitHub repository](https://github.com/ckuethe/RadiaCode-platformio/issues)
 4. Include: ESP32 board type, PlatformIO version, complete error messages
 
-## Building and Uploading
-
 ## ⚙️ Advanced: Using Native ESP-IDF Component Manager
 
 For advanced users who want to use the library as a native ESP-IDF component (without PlatformIO), create a `main/idf_component.yml` in your ESP-IDF project:
