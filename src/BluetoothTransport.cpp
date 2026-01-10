@@ -105,10 +105,8 @@ BluetoothTransport::BluetoothTransport(const char* mac)
                         if (_resp_size > MAX_RESP_SIZE)
                         {
 #ifdef BT_DEBUG_WARNING
-                            printf("Warning: Response size too large (");
-                            printf("%zu", _resp_size);
-                            printf(" bytes), limiting to ");
-                            printf("%zu\n", MAX_RESP_SIZE);
+                            printf("Warning: Response size too large (%zu bytes), limiting to %zu\n", 
+                                   _resp_size, MAX_RESP_SIZE);
 #endif
                             _resp_size = MAX_RESP_SIZE;
                         }

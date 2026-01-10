@@ -109,8 +109,8 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
         if (!ignore_firmware_compatibility_check && ((vmaj < 4) || ((vmaj == 4) && (vmin < 8))))
         {
             char error_msg[100];
-            sprintf(error_msg, "Error:Incompatible firmware version %d.%d, >=4.8 required. Upgrade device firmware", vmaj, vmin);
-            printf("%d\n", error_msg);
+            snprintf(error_msg, sizeof(error_msg), "Error:Incompatible firmware version %d.%d, >=4.8 required. Upgrade device firmware", vmaj, vmin);
+            printf("%s\n", error_msg);
         }
 #endif
 
@@ -450,10 +450,7 @@ std::vector<float> RadiaCode::batchReadVSFRs(const std::vector<uint32_t>& vsfr_i
     if (valid_flags != expected_flags)
     {
 #ifdef RC_DEBUG_ERROR
-        printf("Error: Unexpected validity flags, bad vsfr_id? ");
-        printf("%b", valid_flags);
-        printf(" != ");
-        printf("%d\n", expected_flags, BIN);
+        printf("Error: Unexpected validity flags, bad vsfr_id? 0x%02X != 0x%02X\n", valid_flags, expected_flags);
 #endif
         return ret;
     }
@@ -527,8 +524,7 @@ uint32_t RadiaCode::readVSFR(uint32_t vsfr_id)
 #ifdef RC_DEBUG_ERROR
         printf("Error: Invalid VSFR ID 0x");
         printf("%X", vsfr_id);
-        printf(", validity flags: ");
-        printf("%d\n", valid_flags, BIN);
+        printf(", validity flags: 0x%02X\n", valid_flags);
 #endif
         return 0;
     }
