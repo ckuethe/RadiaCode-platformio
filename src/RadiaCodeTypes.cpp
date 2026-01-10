@@ -21,6 +21,7 @@
 /**********************************************************************************/
 
 #include "RadiaCodeTypes.h"
+#include <cstdio>
 
 // Debugging switches
 #define RCTYPES_DEBUG_WARNING
@@ -62,7 +63,7 @@ Spectrum::Spectrum(const Spectrum& other) :
     if (safe_count > MAX_CHANNELS)
     {
 #ifdef RCTYPES_DEBUG_WARNING
-        Serial.println("Warning: Copy constructor truncating spectrum data");
+        printf("Warning: Copy constructor truncating spectrum data\n");
 #endif
         safe_count = MAX_CHANNELS;
     }
@@ -95,7 +96,7 @@ Spectrum& Spectrum::operator=(const Spectrum& other)
         if (safe_count > MAX_CHANNELS)
         {
 #ifdef RCTYPES_DEBUG_WARNING
-            Serial.println("Warning: Assignment operator truncating spectrum data");
+            printf("Warning: Assignment operator truncating spectrum data\n");
 #endif
             safe_count = MAX_CHANNELS;
         }
@@ -153,7 +154,7 @@ void Spectrum::push_back(uint32_t value)
         if (!warning_printed)
         {
 #ifdef RCTYPES_DEBUG_WARNING
-            Serial.println("Warning: Spectrum array full, ignoring additional data");
+            printf("Warning: Spectrum array full, ignoring additional data\n");
 #endif
             warning_printed = true;
         }

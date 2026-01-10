@@ -128,7 +128,7 @@ extern "C" void app_main(void)
     // 1. BLE connection is established
     // 2. We can communicate with the device
     // 3. The device is responding
-    String serialNum = radiacode->serialNumber();
+    std::string serialNum = radiacode->serialNumber();
     
     if (serialNum.length() > 0)
     {

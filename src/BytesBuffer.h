@@ -23,7 +23,9 @@
 #ifndef BytesBuffer_h
 #define BytesBuffer_h
 
-#include "Arduino.h"
+#include <cstdint>
+#include <cstddef>
+#include <string>
 
 class BytesBuffer
 {
@@ -47,7 +49,7 @@ class BytesBuffer
         bool readFloat(float* value);
         size_t readBytes(uint8_t* buffer, size_t length);
         bool peekBytes(uint8_t* buffer, size_t offset, size_t length);
-        String readString(void);
+        std::string readString(void);
 
         // Writing methods
         bool writeUint8(uint8_t value);
@@ -58,7 +60,7 @@ class BytesBuffer
         bool writeInt32(int32_t value);
         bool writeFloat(float value);
         size_t writeBytes(const uint8_t* buffer, size_t length);
-        bool writeString(const String& str);
+        bool writeString(const std::string& str);
 
         // Utility methods
         size_t available(void) const;
