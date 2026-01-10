@@ -1,0 +1,41 @@
+{
+  "name": "RadiaCode",
+  "version": "1.0.0",
+  "description": "A library for interfacing with RadiaCode radiation detection devices via Bluetooth connections. Supports device configuration, data acquisition and spectrum analysis.",
+  "keywords": [
+    "BLE",
+    "Bluetooth",
+    "RadiaCode",
+    "Radiation",
+    "Detector",
+    "ESP32",
+    "Geiger"
+  ],
+  "homepage": "https://github.com/mkgeiger/RadiaCode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mkgeiger/RadiaCode.git"
+  },
+  "license": "MIT",
+  "authors": {
+    "name": "Markus Geiger",
+    "maintainer": true
+  },
+  "export": {
+    "include": [
+      "src",
+      "examples",
+      "keywords.txt",
+      "library.properties",
+      "LICENSE"
+    ]
+  },
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"],
+  "dependencies": {
+    "h2zero/esp-nimble-cpp": "^2.0.0"
+  },
+  "build": {
+    "libArchive": false
+  }
+}

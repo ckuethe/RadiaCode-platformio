@@ -24,10 +24,22 @@
 
 #ifdef BT_SUPPORT_ENABLED
 
+#include <cstdio>
+
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#endif
+
 // Include platform-specific BLE libraries
 #if defined(ARDUINO_ARCH_ESP32)
-#include <BLEDevice.h>
-#include <BLEClient.h>
+    // Arduino framework - use Arduino BLE library
+    #include <BLEDevice.h>
+    #include <BLEClient.h>
+#elif defined(ESP_PLATFORM)
+    // ESP-IDF framework - use esp-nimble-cpp library
+    // NimBLE provides compatibility aliases that match Arduino BLE API
+    #include <NimBLEDevice.h>
 #endif
 
 // Debugging switches
@@ -47,9 +59,9 @@ BluetoothTransport::BluetoothTransport(const char* mac)
     // Initialize the buffer to zeros
     memset(_resp_buffer, 0, MAX_RESP_SIZE);
 
-    // Initialize BLE client - platform-specific code
-#if defined(ARDUINO_ARCH_ESP32)
-    // ESP32 BLE initialization
+    // Initialize BLE client - works for both Arduino and ESP-IDF (via NimBLE compatibility)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+    // ESP32 BLE initialization (same API for Arduino and ESP-IDF with NimBLE)
     BLEDevice::init("RadiaCode Client");
     BLEClient* pClient = BLEDevice::createClient();
 
@@ -98,10 +110,8 @@ BluetoothTransport::BluetoothTransport(const char* mac)
                         if (_resp_size > MAX_RESP_SIZE)
                         {
 #ifdef BT_DEBUG_WARNING
-                            Serial.print("Warning: Response size too large (");
-                            Serial.print(_resp_size);
-                            Serial.print(" bytes), limiting to ");
-                            Serial.println(MAX_RESP_SIZE);
+                            printf("Warning: Response size too large (%zu bytes), limiting to %zu\n", 
+                                   _resp_size, MAX_RESP_SIZE);
 #endif
                             _resp_size = MAX_RESP_SIZE;
                         }
@@ -122,7 +132,7 @@ BluetoothTransport::BluetoothTransport(const char* mac)
                             {
                                 copyLength = MAX_RESP_SIZE - _resp_received;
 #ifdef BT_DEBUG_WARNING
-                                Serial.println("Warning: Truncating BLE packet to fit buffer");
+                                printf("Warning: Truncating BLE packet to fit buffer\n");
 #endif
                             }
 
@@ -140,11 +150,11 @@ BluetoothTransport::BluetoothTransport(const char* mac)
                     {
                         _response_ready = true;
 #ifdef BT_DEBUG_INFO
-                        Serial.print("Response complete: ");
-                        Serial.print(_resp_received);
-                        Serial.print(" of ");
-                        Serial.print(_resp_size);
-                        Serial.println(" bytes received");
+                        printf("Response complete: ");
+                        printf("%zu", _resp_received);
+                        printf(" of ");
+                        printf("%zu", _resp_size);
+                        printf(" bytes received\n");
 #endif
                     }
                 });
@@ -156,22 +166,22 @@ BluetoothTransport::BluetoothTransport(const char* mac)
     }
     else
     {
-        Serial.println("Failed to connect to BLE device");
+        printf("Failed to connect to BLE device\n");
         _peripheral = nullptr;
     }
 #else
-    _peripheral = nullptr; // Would be initialized with actual BLE connection
+    _peripheral = nullptr; // Fallback for unsupported platforms
 #endif
 #else
-    Serial.println("Bluetooth not supported on this platform");
+    printf("Bluetooth not supported on this platform\n");
 #endif
 }
 
 BluetoothTransport::~BluetoothTransport(void)
 {
 #ifdef BT_SUPPORT_ENABLED
-    // Clean up BLE resources - platform-specific code
-#if defined(ARDUINO_ARCH_ESP32)
+    // Clean up BLE resources - works for both Arduino and ESP-IDF (via NimBLE compatibility)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
     if (_peripheral != nullptr)
     {
         BLEClient* pClient = (BLEClient*)_peripheral;
@@ -192,7 +202,7 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
 #ifdef BT_SUPPORT_ENABLED
     if (_peripheral == nullptr)
     {
-        Serial.println("Bluetooth not connected");
+        printf("Bluetooth not connected\n");
         return response;
     }
 
@@ -201,8 +211,8 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
     _resp_size = 0;
     _response_ready = false;
 
-    // Send request in chunks - platform-specific code
-#if defined(ARDUINO_ARCH_ESP32)
+    // Send request in chunks - works for both Arduino and ESP-IDF (via NimBLE compatibility)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
     BLEClient* pClient = (BLEClient*)_peripheral;
     BLEUUID writeUUID("e63215e6-7003-49d8-96b0-b024798fb901");
     BLERemoteService* pService = pClient->getService(BLEUUID("e63215e5-7003-49d8-96b0-b024798fb901"));
@@ -219,44 +229,44 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
         memcpy(chunk, request + pos, toSend);
         
         pWriteChar->writeValue(chunk, toSend);
-        delay(5); // Small delay to avoid overwhelming the BLE stack
+        vTaskDelay(pdMS_TO_TICKS(5)); // Small delay to avoid overwhelming the BLE stack
     }
 #endif
 
     // Wait for response with timeout - extended to 30 seconds
-    unsigned long startTime = millis();
-    const unsigned long TIMEOUT_MS = 30000; // Increased timeout to 30 seconds
-    unsigned long elapsedTime = 0;
+    uint32_t startTime = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    const uint32_t TIMEOUT_MS = 30000; // Increased timeout to 30 seconds
+    uint32_t elapsedTime = 0;
 
-    while ((!_response_ready) && ((elapsedTime = (millis() - startTime)) < TIMEOUT_MS))
+    while ((!_response_ready) && ((elapsedTime = ((uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - startTime)) < TIMEOUT_MS))
     {
 #ifdef BT_DEBUG_INFO
         // Print progress every 2 seconds
         if ((elapsedTime % 2000) < 20)
         {
-            Serial.print("Waiting for BLE response: ");
-            Serial.print(_resp_received);
-            Serial.print("/");
-            Serial.print(_resp_size > 0 ? _resp_size : '?');
-            Serial.print(" bytes (");
-            Serial.print(elapsedTime / 1000);
-            Serial.println("s)");
+            if (_resp_size > 0) {
+                printf("Waiting for BLE response: %zu/%zu bytes (%lus)\n", 
+                       _resp_received, _resp_size, elapsedTime / 1000);
+            } else {
+                printf("Waiting for BLE response: %zu/? bytes (%lus)\n", 
+                       _resp_received, elapsedTime / 1000);
+            }
         }
 #endif
-        delay(50); // Less frequent polling
-        yield(); // Allow ESP32 background tasks to run
+        vTaskDelay(pdMS_TO_TICKS(50)); // Less frequent polling
+        taskYIELD(); // Allow ESP32 background tasks to run
     }
 
     if (!_response_ready)
     {
 #ifdef BT_DEBUG_WARNING
-        Serial.print("Warning: Bluetooth response timeout after ");
-        Serial.print(TIMEOUT_MS / 1000);
-        Serial.print("s. Received ");
-        Serial.print(_resp_received);
-        Serial.print(" of ");
-        Serial.print(_resp_size);
-        Serial.println(" bytes");
+        printf("Warning: Bluetooth response timeout after ");
+        printf("%lu", TIMEOUT_MS / 1000);
+        printf("s. Received ");
+        printf("%zu", _resp_received);
+        printf(" of ");
+        printf("%zu", _resp_size);
+        printf(" bytes\n");
 #endif
         return response;
     }
@@ -271,7 +281,7 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
         if (dataSize > (MAX_RESP_SIZE - 4))
         {
 #ifdef BT_DEBUG_WARNING
-            Serial.println("Warning: Invalid response size detected");
+            printf("Warning: Invalid response size detected\n");
 #endif
             dataSize = MAX_RESP_SIZE - 4;
         }
@@ -281,7 +291,7 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
         {
             dataSize = BytesBuffer::MAX_BUFFER_SIZE;
 #ifdef BT_DEBUG_WARNING
-            Serial.println("Warning: Truncating response to fit BytesBuffer");
+            printf("Warning: Truncating response to fit BytesBuffer\n");
 #endif
         }
 
@@ -289,7 +299,7 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
         response = BytesBuffer(_resp_buffer + 4, dataSize);
     }
 #else
-    Serial.println("Bluetooth not supported on this platform");
+    printf("Bluetooth not supported on this platform\n");
 #endif
 
     return response;

@@ -23,7 +23,8 @@
 #ifndef RadiaCodeTypes_h
 #define RadiaCodeTypes_h
 
-#include "Arduino.h"
+#include <cstdint>
+#include <string>
 #include <vector>
 
 // Forward declarations
@@ -372,12 +373,12 @@ struct AlarmLimits
 {
     float l1_count_rate;
     float l2_count_rate;
-    String count_unit;
+    std::string count_unit;
     float l1_dose_rate;
     float l2_dose_rate;
     float l1_dose;
     float l2_dose;
-    String dose_unit;
+    std::string dose_unit;
 };
 
 #endif

@@ -21,6 +21,8 @@
 /**********************************************************************************/
 
 #include "BytesBuffer.h"
+#include <cstring>
+#include <cstdio>
 
 // Debugging switches
 #define BUF_DEBUG_WARNING
@@ -56,7 +58,7 @@ BytesBuffer::BytesBuffer(const uint8_t* data, size_t length)
     if (data == nullptr)
     {
 #ifdef BUF_DEBUG_WARNING
-        Serial.println("Warning: Null data pointer in BytesBuffer constructor");
+        printf("Warning: Null data pointer in BytesBuffer constructor\n");
 #endif
         return; // Leave _size as 0
     }
@@ -70,7 +72,7 @@ BytesBuffer::BytesBuffer(const uint8_t* data, size_t length)
     if (length > MAX_BUFFER_SIZE)
     {
 #ifdef BUF_DEBUG_WARNING
-        Serial.println("Warning: BytesBuffer truncating data in constructor");
+        printf("Warning: BytesBuffer truncating data in constructor\n");
 #endif
         _size = MAX_BUFFER_SIZE;
     }
@@ -135,7 +137,7 @@ bool BytesBuffer::readUint8(uint8_t* value)
     if ((_position >= _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readUint8");
+        printf("Error: Buffer overflow prevented in readUint8\n");
 #endif
         if (value != nullptr)
         {
@@ -155,7 +157,7 @@ bool BytesBuffer::readUint16(uint16_t* value)
     if ((_position >= _size) || ((_position + sizeof(uint16_t)) > _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readUint16");
+        printf("Error: Buffer overflow prevented in readUint16\n");
 #endif
         if (value != nullptr)
         {
@@ -188,7 +190,7 @@ bool BytesBuffer::readUint32(uint32_t* value)
     if ((_position >= _size) || ((_position + sizeof(uint32_t)) > _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readUint32");
+        printf("Error: Buffer overflow prevented in readUint32\n");
 #endif
         if (value != nullptr)
         {
@@ -229,7 +231,7 @@ bool BytesBuffer::readInt8(int8_t* value)
     if ((_position >= _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readInt8");
+        printf("Error: Buffer overflow prevented in readInt8\n");
 #endif
         if (value != nullptr)
         {
@@ -249,7 +251,7 @@ bool BytesBuffer::readInt16(int16_t* value)
     if ((_position >= _size) || ((_position + sizeof(int16_t)) > _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readInt16");
+        printf("Error: Buffer overflow prevented in readInt16\n");
 #endif
         if (value != nullptr)
         {
@@ -282,7 +284,7 @@ bool BytesBuffer::readInt32(int32_t* value)
     if ((_position >= _size) || ((_position + sizeof(int32_t)) > _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readInt32");
+        printf("Error: Buffer overflow prevented in readInt32\n");
 #endif
         if (value != nullptr)
         {
@@ -323,7 +325,7 @@ bool BytesBuffer::readFloat(float* value)
     if ((_position >= _size) || ((_position + sizeof(float)) > _size) || (value == nullptr))
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Buffer overflow prevented in readFloat");
+        printf("Error: Buffer overflow prevented in readFloat\n");
 #endif
         *value = 0.0f; // Set a safe default
         return false;
@@ -375,7 +377,7 @@ bool BytesBuffer::peekBytes(uint8_t* buffer, size_t offset, size_t length)
     if (buffer == nullptr)
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Null buffer in peekBytes");
+        printf("Error: Null buffer in peekBytes\n");
 #endif
         return false;
     }
@@ -383,7 +385,7 @@ bool BytesBuffer::peekBytes(uint8_t* buffer, size_t offset, size_t length)
     if (offset >= _size)
     {
 #ifdef BUF_DEBUG_ERROR
-        Serial.println("Error: Offset out of bounds in peekBytes");
+        printf("Error: Offset out of bounds in peekBytes\n");
 #endif
         return false;
     }
@@ -392,10 +394,7 @@ bool BytesBuffer::peekBytes(uint8_t* buffer, size_t offset, size_t length)
     if ((offset + length) > _size)
     {
 #ifdef BUF_DEBUG_WARNING
-        Serial.print("Warning: Truncating peekBytes read from ");
-        Serial.print(length);
-        Serial.print(" to ");
-        Serial.println(_size - offset);
+        printf("Warning: Truncating peekBytes read from %zu to %zu\n", length, _size - offset);
 #endif
         // Only copy up to the available data
         length = _size - offset;
@@ -410,20 +409,20 @@ bool BytesBuffer::peekBytes(uint8_t* buffer, size_t offset, size_t length)
     return (length > 0);
 }
 
-String BytesBuffer::readString(void)
+std::string BytesBuffer::readString(void)
 {
     uint8_t length;
     if (!readUint8(&length))
     {
-        return String("");
+        return std::string("");
     }
 
     if ((_position + length) > _size)
     {
-        return String("");
+        return std::string("");
     }
 
-    String result;
+    std::string result;
     result.reserve(length);
 
     for (uint8_t i = 0; i < length; i++)
@@ -549,7 +548,7 @@ size_t BytesBuffer::writeBytes(const uint8_t* buffer, size_t length)
     return length;
 }
 
-bool BytesBuffer::writeString(const String& str)
+bool BytesBuffer::writeString(const std::string& str)
 {
     uint8_t length = str.length();
 
@@ -560,7 +559,7 @@ bool BytesBuffer::writeString(const String& str)
 
     for (uint8_t i = 0; i < length; i++)
     {
-        if (!writeUint8(str.charAt(i)))
+        if (!writeUint8(str[i]))
         {
             return false;
         }
@@ -623,10 +622,7 @@ bool BytesBuffer::ensureCapacity(size_t additionalBytes)
 
 #ifdef BUF_DEBUG_ERROR
     // With a fixed buffer, we can't grow beyond MAX_BUFFER_SIZE
-    Serial.print("Error: BytesBuffer capacity exceeded. Required: ");
-    Serial.print(required);
-    Serial.print(", Maximum: ");
-    Serial.println(MAX_BUFFER_SIZE);
+    printf("Error: BytesBuffer capacity exceeded. Required: %zu, Maximum: %zu\n", required, MAX_BUFFER_SIZE);
 #endif
 
     // Return false to indicate failure

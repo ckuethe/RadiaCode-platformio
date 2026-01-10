@@ -1,13 +1,15 @@
-# RadiaCode Arduino Library
+# RadiaCode Library for ESP32
 
 ![RadiaCode](/doc/radiacode.jpg)
 
 [![Arduino](https://img.shields.io/badge/Arduino-Library-00979D.svg)](https://www.arduino.cc/)
+[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-Component-red.svg)](https://docs.espressif.com/projects/esp-idf/)
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-Compatible-red.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)](https://github.com/mkgeiger/RadiaCode/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A comprehensive Arduino library for interfacing with RadiaCode radiation detection devices via Bluetooth Low Energy (BLE). Designed for ESP32, but can easily ported to other BLE-capable microcontrollers.
+A comprehensive library for interfacing with RadiaCode radiation detection devices via Bluetooth Low Energy (BLE). Supports both **Arduino** and **ESP-IDF** frameworks on ESP32.
 
 ## 📋 Features
 
@@ -17,12 +19,15 @@ A comprehensive Arduino library for interfacing with RadiaCode radiation detecti
 - **Memory Optimized**: ESP32-friendly memory management for stable operation
 - **Error Handling**: Robust error detection and reporting
 - **User-friendly API**: Intuitive interface for device interaction
+- **Multi-Framework Support**: Works with both Arduino and ESP-IDF frameworks
 
-## 🧩 Supported Hardware
+## 🧩 Supported Hardware & Frameworks
 
 - **Devices**: RadiaCode-102, RadiaCode-103, RadiaCode-103G, RadiaCode-110
-- **Microcontrollers**:
-  - ESP32
+- **Microcontrollers**: ESP32 family
+- **Frameworks**:
+  - Arduino (Arduino IDE, PlatformIO)
+  - ESP-IDF (PlatformIO, native ESP-IDF)
 
 ## ⚡ Quick Start
 
@@ -33,6 +38,28 @@ A comprehensive Arduino library for interfacing with RadiaCode radiation detecti
 2. Go to **Sketch → Include Library → Manage Libraries**
 3. Search for "RadiaCode"
 4. Click Install
+
+#### Using PlatformIO with Arduino Framework
+Add to your `platformio.ini`:
+```ini
+[env:arduino-esp32]
+platform = espressif32
+framework = arduino
+lib_deps = 
+    RadiaCode
+```
+
+#### Using PlatformIO with ESP-IDF Framework
+The library uses Arduino APIs for convenience. When using ESP-IDF, include Arduino as a component:
+```ini
+[env:espidf-esp32]
+platform = espressif32
+framework = espidf, arduino
+lib_deps = 
+    h2zero/esp-nimble-cpp@^2.0.0
+```
+
+Reference the library as an ESP-IDF component (see the [PlatformIO-ESPIDF example](examples/PlatformIO-ESPIDF/)).
 
 #### Manual Installation
 1. Download this repository as a ZIP file
@@ -109,9 +136,10 @@ void loop(void)
 
 The library includes several examples to get you started:
 
-- **[Basic](examples/Basic/Basic.ino)**: Simple connection and data reading
-- **[Spectrum](examples/Spectrum/Spectrum.ino)**: Acquire and visualize radiation spectrum data
-- **[Test](examples/Test/Test.ino)**: Test communication with the device
+- **[Basic](examples/Basic/Basic.ino)**: Simple connection and data reading (Arduino)
+- **[Spectrum](examples/Spectrum/Spectrum.ino)**: Acquire and visualize radiation spectrum data (Arduino)
+- **[Test](examples/Test/Test.ino)**: Test communication with the device (Arduino)
+- **[PlatformIO-ESPIDF](examples/PlatformIO-ESPIDF/)**: Using the library with ESP-IDF framework
 
 ## 🛠️ API Reference
 
@@ -168,6 +196,36 @@ The library is optimized for ESP32 and other microcontrollers with limited memor
 - Efficient data structures to reduce memory usage
 - Stack-friendly implementations to prevent overflow
 - Safe bounds checking throughout the codebase
+
+## 🏗️ Technical Implementation
+
+### Framework Support
+
+The library automatically detects the framework at compile time:
+
+- **Arduino Framework**: Uses Arduino BLE library (`BLEDevice.h`)
+- **ESP-IDF Framework**: Uses esp-nimble-cpp library (`NimBLEDevice.h`) with Arduino as an ESP-IDF component
+
+The esp-nimble-cpp library provides API compatibility aliases that match the Arduino BLE API, allowing the same code to work across both frameworks with minimal changes.
+
+### Hybrid Approach for ESP-IDF
+
+When using ESP-IDF, the library takes a hybrid approach by including Arduino as an ESP-IDF component. This provides:
+- Full access to ESP-IDF features and components
+- Arduino API compatibility (String, Serial, etc.)
+- Simplified code that works across frameworks
+
+In PlatformIO, specify both frameworks: `framework = espidf, arduino`
+
+### Component Structure
+
+For ESP-IDF integration, the library includes:
+
+- `idf_component.yml` - ESP-IDF component manifest with dependencies
+- `CMakeLists.txt` - Build configuration that detects ESP-IDF vs standard builds and optionally includes Arduino
+- `library.json` - PlatformIO library manifest for multi-framework support
+
+The library automatically includes `esp-nimble-cpp` as a dependency when used as an ESP-IDF component.
 
 ## 📄 License
 
