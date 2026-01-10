@@ -85,7 +85,7 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
         execute(COMMAND::SET_EXCHANGE, init_data, sizeof(init_data));
 
         // Set current time
-        time_t now = time(nullptr);   // Get current time in UNIX format, years since 1900
+        time_t now = time(nullptr);   // Get current time in UNIX format (seconds since Jan 1, 1970)
         if (now > 0)
         {
             struct tm* timeinfo = localtime(&now);
@@ -109,7 +109,7 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
         if (!ignore_firmware_compatibility_check && ((vmaj < 4) || ((vmaj == 4) && (vmin < 8))))
         {
             char error_msg[100];
-            snprintf(error_msg, sizeof(error_msg), "Error:Incompatible firmware version %d.%d, >=4.8 required. Upgrade device firmware", vmaj, vmin);
+            snprintf(error_msg, sizeof(error_msg), "Error: Incompatible firmware version %d.%d, >=4.8 required. Upgrade device firmware", vmaj, vmin);
             printf("%s\n", error_msg);
         }
 #endif
@@ -462,8 +462,7 @@ std::vector<float> RadiaCode::batchReadVSFRs(const std::vector<uint32_t>& vsfr_i
         r.readUint32(&raw_value);
 
         // Convert to appropriate type based on VSFR format
-        // This is a simplified version as Arduino doesn't easily support complex type handling
-        // In a full implementation, we'd need to map each VSFR to its format
+        // This is a simplified version - a full implementation would need to map each VSFR to its format
 
         uint32_t vsfr_id = vsfr_ids[i];
         if ((vsfr_id == VSFR::CHN_TO_keV_A0) || (vsfr_id == VSFR::CHN_TO_keV_A1) || (vsfr_id == VSFR::CHN_TO_keV_A2))

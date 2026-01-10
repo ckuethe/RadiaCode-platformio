@@ -25,6 +25,11 @@
 #include "RadiaCodeTypes.h"
 #include <cstdio>
 
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#endif
+
 // Debugging switches
 #undef  DEC_DEBUG_INFO
 #define DEC_DEBUG_WARNING
@@ -303,12 +308,13 @@ std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
         {
             // Only print sequence jump message occasionally to reduce spam
             static uint32_t last_seq_warning = 0;
-            if ((millis() - last_seq_warning) > 10000) // Every 10 seconds max
+            uint32_t current_time = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+            if ((current_time - last_seq_warning) > 10000) // Every 10 seconds max
             {
 #ifdef DEC_DEBUG_ERROR
                 printf("Error: Sequence jump detected, expected: %u, got: %u\n", next_seq, seq);
 #endif
-                last_seq_warning = millis();
+                last_seq_warning = current_time;
             }
             // Continue processing instead of breaking - sequence jumps are not critical
             next_seq = seq; // Resync to current sequence

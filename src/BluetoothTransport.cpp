@@ -26,9 +26,15 @@
 
 #include <cstdio>
 
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#endif
+
 // Include platform-specific BLE libraries
 #if defined(ARDUINO_ARCH_ESP32)
     // Arduino framework - use Arduino BLE library
+    #include <BLEDevice.h>
     #include <BLEDevice.h>
     #include <BLEClient.h>
 #elif defined(ESP_PLATFORM)
@@ -224,16 +230,16 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
         memcpy(chunk, request + pos, toSend);
         
         pWriteChar->writeValue(chunk, toSend);
-        delay(5); // Small delay to avoid overwhelming the BLE stack
+        vTaskDelay(pdMS_TO_TICKS(5)); // Small delay to avoid overwhelming the BLE stack
     }
 #endif
 
     // Wait for response with timeout - extended to 30 seconds
-    unsigned long startTime = millis();
-    const unsigned long TIMEOUT_MS = 30000; // Increased timeout to 30 seconds
-    unsigned long elapsedTime = 0;
+    uint32_t startTime = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    const uint32_t TIMEOUT_MS = 30000; // Increased timeout to 30 seconds
+    uint32_t elapsedTime = 0;
 
-    while ((!_response_ready) && ((elapsedTime = (millis() - startTime)) < TIMEOUT_MS))
+    while ((!_response_ready) && ((elapsedTime = ((uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - startTime)) < TIMEOUT_MS))
     {
 #ifdef BT_DEBUG_INFO
         // Print progress every 2 seconds
@@ -248,8 +254,8 @@ BytesBuffer BluetoothTransport::execute(const uint8_t* request, size_t length)
             }
         }
 #endif
-        delay(50); // Less frequent polling
-        yield(); // Allow ESP32 background tasks to run
+        vTaskDelay(pdMS_TO_TICKS(50)); // Less frequent polling
+        taskYIELD(); // Allow ESP32 background tasks to run
     }
 
     if (!_response_ready)
