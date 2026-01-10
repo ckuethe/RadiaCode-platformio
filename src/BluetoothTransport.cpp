@@ -35,7 +35,6 @@
 #if defined(ARDUINO_ARCH_ESP32)
     // Arduino framework - use Arduino BLE library
     #include <BLEDevice.h>
-    #include <BLEDevice.h>
     #include <BLEClient.h>
 #elif defined(ESP_PLATFORM)
     // ESP-IDF framework - use esp-nimble-cpp library
