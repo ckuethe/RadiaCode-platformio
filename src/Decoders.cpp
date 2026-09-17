@@ -23,6 +23,8 @@
 #include "Decoders.h"
 #include "BytesBuffer.h"
 #include "RadiaCodeTypes.h"
+#include "RadiaCodeLog.h"
+#include "RadiaCodeCompat.h"
 
 // Debugging switches
 #undef  DEC_DEBUG_INFO
@@ -39,7 +41,7 @@ void decodeCountsV0(BytesBuffer& br, Spectrum& spectrum)
     if (br.available() < sizeof(uint32_t))
     {
 #ifdef DEC_DEBUG_WARNING
-        Serial.println("Warning: Not enough data for spectrum decoding (V0)");
+        RC_LOGW("Warning: Not enough data for spectrum decoding (V0)");
 #endif
         return;
     }
@@ -59,7 +61,7 @@ void decodeCountsV0(BytesBuffer& br, Spectrum& spectrum)
             else
             {
 #ifdef DEC_DEBUG_WARNING
-                Serial.println("Warning: Reached maximum spectrum channels");
+                RC_LOGW("Warning: Reached maximum spectrum channels");
 #endif
                 break;
             }
@@ -67,7 +69,7 @@ void decodeCountsV0(BytesBuffer& br, Spectrum& spectrum)
         else
         {
 #ifdef DEC_DEBUG_ERROR
-            Serial.println("Error reading uint32 in decodeCountsV0");
+            RC_LOGE("Error reading uint32 in decodeCountsV0");
 #endif
             break;
         }
@@ -85,7 +87,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
     if (br.available() < sizeof(uint16_t))
     {
 #ifdef DEC_DEBUG_WARNING
-        Serial.println("Warning: Not enough data for spectrum decoding");
+        RC_LOGW("Warning: Not enough data for spectrum decoding");
 #endif
         return;
     }
@@ -96,7 +98,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
         if (!br.readUint16(&u16))
         {
 #ifdef DEC_DEBUG_ERROR
-            Serial.println("Error reading u16 in decodeCountsV1");
+            RC_LOGE("Error reading u16 in decodeCountsV1");
 #endif
             break;
         }
@@ -108,8 +110,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
         if (cnt > 4096)
         {
 #ifdef DEC_DEBUG_WARNING
-            Serial.print("Warning: Suspicious count value in spectrum: ");
-            Serial.println(cnt);
+            RC_LOGW("Warning: Suspicious count value in spectrum: %u", (unsigned)cnt);
 #endif
             cnt = 0; // Skip this block
         }
@@ -128,7 +129,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
                 if (!br.readUint8(&val))
                 {
 #ifdef DEC_DEBUG_ERROR
-                    Serial.println("Error reading uint8 in decodeCountsV1");
+                    RC_LOGE("Error reading uint8 in decodeCountsV1");
 #endif
                     goto end_decoding;
                 }
@@ -140,7 +141,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
                 if (!br.readInt8(&val))
                 {
 #ifdef DEC_DEBUG_ERROR
-                    Serial.println("Error reading int8 in decodeCountsV1");
+                    RC_LOGE("Error reading int8 in decodeCountsV1");
 #endif
                     goto end_decoding;
                 }
@@ -152,7 +153,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
                 if (!br.readInt16(&val))
                 {
 #ifdef DEC_DEBUG_ERROR
-                    Serial.println("Error reading int16 in decodeCountsV1");
+                    RC_LOGE("Error reading int16 in decodeCountsV1");
 #endif
                     goto end_decoding;
                 }
@@ -163,7 +164,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
                 if (br.available() < 3)
                 {
 #ifdef DEC_DEBUG_ERROR
-                    Serial.println("Error: Not enough data for vlen=4");
+                    RC_LOGE("Error: Not enough data for vlen=4");
 #endif
                     goto end_decoding;
                 }
@@ -172,7 +173,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
                 if ((!br.readUint8(&a)) || (!br.readUint8(&b)) || (!br.readInt8(&c)))
                 {
 #ifdef DEC_DEBUG_ERROR
-                    Serial.println("Error reading 3-byte value in decodeCountsV1");
+                    RC_LOGE("Error reading 3-byte value in decodeCountsV1");
 #endif
                     goto end_decoding;
                 }
@@ -184,7 +185,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
                 if (!br.readInt32(&val))
                 {
 #ifdef DEC_DEBUG_ERROR
-                    Serial.println("Error reading int32 in decodeCountsV1");
+                    RC_LOGE("Error reading int32 in decodeCountsV1");
 #endif
                     goto end_decoding;
                 }
@@ -193,8 +194,7 @@ void decodeCountsV1(BytesBuffer& br, Spectrum& spectrum)
             else
             {
 #ifdef DEC_DEBUG_ERROR
-                Serial.print("Error: Unsupported vlen in decodeCountsV1: ");
-                Serial.println(vlen);
+                RC_LOGE("Error: Unsupported vlen in decodeCountsV1: %u", (unsigned)vlen);
 #endif
                 break;
             }
@@ -224,7 +224,7 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     if (br.available() < (4 + 3*4))
     {
 #ifdef DEC_DEBUG_ERROR
-        Serial.println("Error: Not enough data for spectrum header");
+        RC_LOGE("Error: Not enough data for spectrum header");
 #endif
         return;
     }
@@ -234,7 +234,7 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     if (!br.readUint32(&duration))
     {
 #ifdef DEC_DEBUG_ERROR
-        Serial.println("Error reading spectrum duration");
+        RC_LOGE("Error reading spectrum duration");
 #endif
         return;
     }
@@ -243,7 +243,7 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     if ((!br.readFloat(&a0)) || (!br.readFloat(&a1)) || (!br.readFloat(&a2)))
     {
 #ifdef DEC_DEBUG_ERROR
-        Serial.println("Error reading spectrum calibration coefficients");
+        RC_LOGE("Error reading spectrum calibration coefficients");
 #endif
         return;
     }
@@ -266,8 +266,7 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     else
     {
 #ifdef DEC_DEBUG_WARNING
-        Serial.print("Warning: Unsupported spectrum format version: ");
-        Serial.println(format_version);
+        RC_LOGW("Warning: Unsupported spectrum format version: %u", (unsigned)format_version);
 #endif
     }
 
@@ -275,7 +274,7 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     if (spectrum.count_size > Spectrum::MAX_CHANNELS)
     {
 #ifdef DEC_DEBUG_ERROR
-        Serial.println("Error: Spectrum count_size exceeds MAX_CHANNELS!");
+        RC_LOGE("Error: Spectrum count_size exceeds MAX_CHANNELS!");
 #endif
         spectrum.count_size = Spectrum::MAX_CHANNELS;
     }
@@ -305,15 +304,12 @@ std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
         {
             // Only print sequence jump message occasionally to reduce spam
             static uint32_t last_seq_warning = 0;
-            if ((millis() - last_seq_warning) > 10000) // Every 10 seconds max
+            if ((rc_millis() - last_seq_warning) > 10000) // Every 10 seconds max
             {
 #ifdef DEC_DEBUG_ERROR
-                Serial.print("Error: Sequence jump detected, expected: ");
-                Serial.print(next_seq);
-                Serial.print(", got: ");
-                Serial.println(seq);
+                RC_LOGE("Error: Sequence jump detected, expected: %u, got: %u", (unsigned)next_seq, (unsigned)seq);
 #endif
-                last_seq_warning = millis();
+                last_seq_warning = rc_millis();
             }
             // Continue processing instead of breaking - sequence jumps are not critical
             next_seq = seq; // Resync to current sequence
@@ -427,9 +423,7 @@ std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
 
 #ifdef DEC_DEBUG_INFO
             // Debug: Print when we find dose rate data
-            Serial.print("Found RawDoseRate: ");
-            Serial.print(dose_rate);
-            Serial.println(" µR/h");
+            RC_LOGI("Found RawDoseRate: %f uR/h", dose_rate);
 #endif
 
             ret.push_back(data);
@@ -506,10 +500,7 @@ std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
             else
             {
 #ifdef DEC_DEBUG_WARNING
-                Serial.print("Warning: Unknown data type: eid=");
-                Serial.print(eid);
-                Serial.print(", gid=");
-                Serial.println(gid);
+                RC_LOGW("Warning: Unknown data type: eid=%u, gid=%u", (unsigned)eid, (unsigned)gid);
 #endif
                 break; // Stop processing on unknown data type
             }

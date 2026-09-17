@@ -26,7 +26,7 @@
 #include "RadiaCodeTransport.h"
 #include "BytesBuffer.h"
 
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
 #define BT_SUPPORT_ENABLED
 #endif
 
