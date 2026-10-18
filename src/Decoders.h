@@ -27,7 +27,19 @@
 #include "BytesBuffer.h"
 #include <vector>
 
-// Decode data buffer from device
+// Decode a single DATA_BUF record from the front of the buffer.
+//
+// On success *consumed is set to true and the return value is a heap-allocated
+// DataItem (which may be nullptr for record types that carry no useful data but
+// must still be skipped).  The caller owns and must delete any non-null return.
+//
+// If the buffer does not yet hold a complete record, or the record type is not
+// recognized, *consumed is set to false, the buffer position is left unchanged
+// and nullptr is returned so the caller can wait for more bytes or stop.
+DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* consumed);
+
+// Decode a whole DATA_BUF buffer into a list of DataItems (backwards-compatible
+// wrapper around decodeDataBufRecord).
 std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec);
 
 // Decode spectrum data directly into an existing Spectrum object

@@ -280,230 +280,237 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     }
 }
 
-std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
+// Payload sizes (bytes after the 7-byte header) for eid==0 records, keyed by gid.
+// These come from the authoritative python decoder: '<ffHHHB', '<ff', '<IffHH',
+// '<IfHHH', '<IffHH', '<IffHH', '<HHH', '<BBH', '<fH', '<fH'.
+static const uint8_t gid0_payload_size[10] = {15, 8, 16, 14, 16, 16, 6, 4, 6, 6};
+
+DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* consumed)
 {
-    std::vector<DataItem*> ret;
-    uint8_t next_seq = 0; // Initialize to invalid value
-    bool first_packet = true;
+    *consumed = false;
 
-    while (br.available() >= 7)
+    // We need at least the 7-byte record header before we can do anything.
+    if (br.available() < 7)
     {
-        uint8_t seq, eid, gid;
-        int32_t ts_offset;
+        return nullptr;
+    }
 
-        br.readUint8(&seq);
-        br.readUint8(&eid);
-        br.readUint8(&gid);
-        br.readInt32(&ts_offset);
+    size_t rec_pos = br.getPosition();
+    uint8_t seq, eid, gid;
+    int32_t ts_offset;
 
-        // Calculate timestamp
-        uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000;
+    if (!br.readUint8(&seq) || !br.readUint8(&eid) || !br.readUint8(&gid) ||
+        !br.readInt32(&ts_offset))
+    {
+        br.setPosition(rec_pos);
+        return nullptr;
+    }
 
-        // Check sequence number
-        if (!first_packet && (next_seq != seq))
+    uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000;
+
+    DataItem* item = nullptr;
+
+    if (eid == 0 && gid <= 9)
+    {
+        size_t payload = gid0_payload_size[gid];
+        // Bounds check: don't read a partial record (this is what used to cause
+        // "Buffer overflow prevented" warnings and garbage "Unknown data type" logs).
+        if (br.available() < payload)
         {
-            // Only print sequence jump message occasionally to reduce spam
-            static uint32_t last_seq_warning = 0;
-            if ((rc_millis() - last_seq_warning) > 10000) // Every 10 seconds max
-            {
-#ifdef DEC_DEBUG_ERROR
-                RC_LOGE("Error: Sequence jump detected, expected: %u, got: %u", (unsigned)next_seq, (unsigned)seq);
-#endif
-                last_seq_warning = rc_millis();
-            }
-            // Continue processing instead of breaking - sequence jumps are not critical
-            next_seq = seq; // Resync to current sequence
+            br.setPosition(rec_pos);
+            return nullptr;
         }
-        first_packet = false;
-        next_seq = (seq + 1) % 256;
 
-        if ((eid == 0) && (gid == 0)) // GRP_RealTimeData
+        switch (gid)
+        {
+        case 0: // GRP_RealTimeData
         {
             RealTimeData* data = new RealTimeData();
             data->timestamp = timestamp;
-
-            br.readFloat(&data->count_rate);
-            // dose_rate should be read as float, not uint16_t
-            br.readFloat(&data->dose_rate);  // Read as float directly, no conversion needed
-
-            // count_rate_err and dose_rate_err are float in RealTimeData
-            uint16_t tempCountRateErr, tempDoseRateErr;
-            br.readUint16(&tempCountRateErr);
-            br.readUint16(&tempDoseRateErr);
-            data->count_rate_err = tempCountRateErr;
-            data->dose_rate_err = tempDoseRateErr;
-
-            br.readUint16(&data->flags);
-            br.readUint8(&data->real_time_flags);
-
-            // Convert errors from raw values
-            data->count_rate_err /= 10.0f;
-            data->dose_rate_err /= 10.0f;
-
-            ret.push_back(data);
+            uint16_t cr_err, dr_err;
+            if (!br.readFloat(&data->count_rate) || !br.readFloat(&data->dose_rate) ||
+                !br.readUint16(&cr_err) || !br.readUint16(&dr_err) ||
+                !br.readUint16(&data->flags) || !br.readUint8(&data->real_time_flags))
+            {
+                delete data;
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            data->count_rate_err = cr_err / 10.0f;
+            data->dose_rate_err = dr_err / 10.0f;
+            item = data;
+            break;
         }
-        else if ((eid == 0) && (gid == 1)) // GRP_RawData
+        case 1: // GRP_RawData
         {
             RawData* data = new RawData();
             data->timestamp = timestamp;
-
-            br.readFloat(&data->count_rate);
-            br.readFloat(&data->dose_rate);
-
-            ret.push_back(data);
+            if (!br.readFloat(&data->count_rate) || !br.readFloat(&data->dose_rate))
+            {
+                delete data;
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            item = data;
+            break;
         }
-        else if ((eid == 0) && (gid == 2)) // GRP_DoseRateDB
+        case 2: // GRP_DoseRateDB
         {
             DoseRateDB* data = new DoseRateDB();
             data->timestamp = timestamp;
-
-            br.readUint32(&data->count);
-            br.readFloat(&data->count_rate);
-            br.readFloat(&data->dose_rate);
-
-            // dose_rate_err is float in DoseRateDB
-            uint16_t tempDoseRateErr;
-            br.readUint16(&tempDoseRateErr);
-            data->dose_rate_err = tempDoseRateErr;
-
-            br.readUint16(&data->flags);
-
-            // Convert error from raw value
-            data->dose_rate_err /= 10.0f;
-
-            ret.push_back(data);
+            uint16_t dr_err;
+            if (!br.readUint32(&data->count) || !br.readFloat(&data->count_rate) ||
+                !br.readFloat(&data->dose_rate) || !br.readUint16(&dr_err) ||
+                !br.readUint16(&data->flags))
+            {
+                delete data;
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            data->dose_rate_err = dr_err / 10.0f;
+            item = data;
+            break;
         }
-        else if ((eid == 0) && (gid == 3)) // GRP_RareData
+        case 3: // GRP_RareData
         {
             RareData* data = new RareData();
             data->timestamp = timestamp;
-
-            br.readUint32(&data->duration);
-            br.readFloat(&data->dose);
-
-            uint16_t temperature, charge_level;
-            br.readUint16(&temperature);
-            br.readUint16(&charge_level);
-            br.readUint16(&data->flags);
-
-            // Convert raw values to actual values
-            data->temperature = (temperature - 2000) / 100.0f;
-            data->charge_level = charge_level / 100.0f;
-
-            ret.push_back(data);
+            uint16_t temperature_raw, charge_raw;
+            if (!br.readUint32(&data->duration) || !br.readFloat(&data->dose) ||
+                !br.readUint16(&temperature_raw) || !br.readUint16(&charge_raw) ||
+                !br.readUint16(&data->flags))
+            {
+                delete data;
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            data->temperature = (temperature_raw - 2000) / 100.0f;
+            data->charge_level = charge_raw / 100.0f;
+            item = data;
+            break;
         }
-        else if ((eid == 0) && (gid == 7)) // GRP_Event
+        case 4: // GRP_UserData
+        case 5: // GRP_ScheduleData
+        {
+            // Consume but discard; these carry configuration/schedule info.
+            uint32_t count; float cr, dr; uint16_t err, fl;
+            if (!br.readUint32(&count) || !br.readFloat(&cr) || !br.readFloat(&dr) ||
+                !br.readUint16(&err) || !br.readUint16(&fl))
+            {
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            item = nullptr;
+            break;
+        }
+        case 6: // GRP_AccelData
+        {
+            uint16_t ax, ay, az;
+            if (!br.readUint16(&ax) || !br.readUint16(&ay) || !br.readUint16(&az))
+            {
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            item = nullptr;
+            break;
+        }
+        case 7: // GRP_Event
         {
             Event* data = new Event();
             data->timestamp = timestamp;
-
-            uint8_t event_id;
-            br.readUint8(&event_id);
+            uint8_t event_id, param1; uint16_t fl;
+            if (!br.readUint8(&event_id) || !br.readUint8(&param1) || !br.readUint16(&fl))
+            {
+                delete data;
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
             data->event = static_cast<EventId>(event_id);
-
-            br.readUint8(&data->event_param1);
-            br.readUint16(&data->flags);
-
-            ret.push_back(data);
+            data->event_param1 = param1;
+            data->flags = fl;
+            item = data;
+            break;
         }
-        else if ((eid == 0) && (gid == 9)) // GRP_RawDoseRate - might contain dose rate data
+        case 8: // GRP_RawCountRate
+        case 9: // GRP_RawDoseRate
         {
-            // Create a RawData object to store the dose rate
+            // Surface these as RawData so the proxy can log raw rates too.
             RawData* data = new RawData();
             data->timestamp = timestamp;
-
-            float dose_rate;
-            uint16_t flags;
-            br.readFloat(&dose_rate);
-            br.readUint16(&flags);
-
-            // Set count_rate to 0 since this packet only contains dose_rate
-            data->count_rate = 0.0f;
-            data->dose_rate = dose_rate;
-
-#ifdef DEC_DEBUG_INFO
-            // Debug: Print when we find dose rate data
-            RC_LOGI("Found RawDoseRate: %f uR/h", dose_rate);
-#endif
-
-            ret.push_back(data);
+            float rate; uint16_t fl;
+            if (!br.readFloat(&rate) || !br.readUint16(&fl))
+            {
+                delete data;
+                br.setPosition(rec_pos);
+                return nullptr;
+            }
+            data->count_rate = (gid == 8) ? rate : 0.0f;
+            data->dose_rate = (gid == 9) ? rate : 0.0f;
+            item = data;
+            break;
         }
+        }
+    }
+    else if (eid == 1)
+    {
+        // Variable-length records: [samples u16][time u32] then samples*granularity bytes.
+        size_t granularity = 0;
+        if (gid == 1)      granularity = 8;
+        else if (gid == 2) granularity = 16;
+        else if (gid == 3) granularity = 14;
         else
         {
-            // Skip unknown data types - read and discard based on known patterns
-            if ((eid == 0) && (gid == 4)) // GRP_UserData
-            {
-                uint32_t count;
-                float count_rate, dose_rate;
-                uint16_t dose_rate_err, flags;
-                br.readUint32(&count);
-                br.readFloat(&count_rate);
-                br.readFloat(&dose_rate);
-                br.readUint16(&dose_rate_err);
-                br.readUint16(&flags);
-            }
-            else if ((eid == 0) && (gid == 5)) // GRP_ScheduleData
-            {
-                uint32_t count;
-                float count_rate, dose_rate;
-                uint16_t dose_rate_err, flags;
-                br.readUint32(&count);
-                br.readFloat(&count_rate);
-                br.readFloat(&dose_rate);
-                br.readUint16(&dose_rate_err);
-                br.readUint16(&flags);
-            }
-            else if ((eid == 0) && (gid == 6)) // GRP_AccelData
-            {
-                uint16_t acc_x, acc_y, acc_z;
-                br.readUint16(&acc_x);
-                br.readUint16(&acc_y);
-                br.readUint16(&acc_z);
-            }
-            else if ((eid == 0) && (gid == 8)) // GRP_RawCountRate
-            {
-                float count_rate;
-                uint16_t flags;
-                br.readFloat(&count_rate);
-                br.readUint16(&flags);
-            }
-            else if ((eid == 1) && (gid == 1))
-            {
-                uint16_t samples_num;
-                uint32_t smpl_time_ms;
-                br.readUint16(&samples_num);
-                br.readUint32(&smpl_time_ms);
+            br.setPosition(rec_pos);
+            return nullptr; // unknown eid==1 gid -> stop
+        }
 
-                // Skip 8 bytes per sample
-                br.setPosition(br.getPosition() + 8 * samples_num);
-            }
-            else if ((eid == 1) && (gid == 2))
-            {
-                uint16_t samples_num;
-                uint32_t smpl_time_ms;
-                br.readUint16(&samples_num);
-                br.readUint32(&smpl_time_ms);
+        if (br.available() < 6)
+        {
+            br.setPosition(rec_pos);
+            return nullptr;
+        }
+        uint16_t samples_num;
+        uint32_t smpl_time_ms;
+        if (!br.readUint16(&samples_num) || !br.readUint32(&smpl_time_ms))
+        {
+            br.setPosition(rec_pos);
+            return nullptr;
+        }
+        size_t skip = (size_t)samples_num * granularity;
+        if (br.available() < skip)
+        {
+            br.setPosition(rec_pos);
+            return nullptr;
+        }
+        br.setPosition(br.getPosition() + skip);
+        item = nullptr; // consumed but not kept
+    }
+    else
+    {
+        // Unknown eid/gid combination.
+        br.setPosition(rec_pos);
+        return nullptr;
+    }
 
-                // Skip 16 bytes per sample
-                br.setPosition(br.getPosition() + 16 * samples_num);
-            }
-            else if ((eid == 1) && (gid == 3))
-            {
-                uint16_t samples_num;
-                uint32_t smpl_time_ms;
-                br.readUint16(&samples_num);
-                br.readUint32(&smpl_time_ms);
+    *consumed = true;
+    return item;
+}
 
-                // Skip 14 bytes per sample
-                br.setPosition(br.getPosition() + 14 * samples_num);
-            }
-            else
-            {
-#ifdef DEC_DEBUG_WARNING
-                RC_LOGW("Warning: Unknown data type: eid=%u, gid=%u", (unsigned)eid, (unsigned)gid);
-#endif
-                break; // Stop processing on unknown data type
-            }
+std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
+{
+    std::vector<DataItem*> ret;
+
+    while (true)
+    {
+        bool consumed = false;
+        DataItem* item = decodeDataBufRecord(br, base_time_sec, &consumed);
+        if (!consumed)
+        {
+            break; // need more data or hit an unknown record type
+        }
+        if (item != nullptr)
+        {
+            ret.push_back(item);
         }
     }
 

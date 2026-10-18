@@ -266,7 +266,8 @@ enum DataItemType
     TYPE_REAL_TIME_DATA = 1,
     TYPE_RAW_DATA       = 2,
     TYPE_DOSE_RATE_DB   = 3,
-    TYPE_RARE_DATA      = 4
+    TYPE_RARE_DATA      = 4,
+    TYPE_EVENT          = 5
 };
 
 class DataItem
@@ -322,6 +323,7 @@ class RareData : public DataItem
 class Event : public DataItem
 {
     public:
+        Event() { type = TYPE_EVENT; }
         EventId event;
         uint8_t event_param1;
         uint16_t flags;

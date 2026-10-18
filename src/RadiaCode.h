@@ -69,6 +69,9 @@ class RadiaCode
         Spectrum spectrum(void);
         Spectrum spectrumAccum(void);
 
+        // Connection status
+        bool isConnected(void) const;
+
         // Reset methods
         void doseReset(void);
         void spectrumReset(void);

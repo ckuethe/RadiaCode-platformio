@@ -655,8 +655,29 @@ void RadiaCode::deviceTime(uint32_t v)
 
 std::vector<DataItem*> RadiaCode::dataBuf(void)
 {
-    BytesBuffer r = readRequest(VS::DATA_BUF);
-    return decodeDataBuf(r, _base_time_sec);
+    if (_connection == nullptr)
+    {
+        return std::vector<DataItem*>();
+    }
+
+    // Enable streaming record parsing on the transport so a large DATA_BUF
+    // response is decoded incrementally as BLE notifications arrive, instead
+    // of buffering the whole (potentially huge) response in RAM.
+    _connection->setDataBufStream(_base_time_sec);
+
+    // Send the DATA_BUF read request: RD_VIRT_STRING with the DATA_BUF VS id.
+    uint32_t command_id = VS::DATA_BUF;
+    uint8_t cmd_bytes[4];
+    memcpy(cmd_bytes, &command_id, 4);
+    BytesBuffer r = execute(COMMAND::RD_VIRT_STRING, cmd_bytes, 4);
+
+    // Drain the records the transport parsed incrementally.
+    return _connection->drainDataBufRecords();
+}
+
+bool RadiaCode::isConnected(void) const
+{
+    return (_connection != nullptr) && _connection->isConnected();
 }
 
 Spectrum RadiaCode::spectrum(void)
