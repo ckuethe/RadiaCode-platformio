@@ -57,9 +57,9 @@ class BluetoothTransport : public RadiaCodeTransport
         int _notify_handle;
 
         // Use fixed buffer instead of dynamic allocation for response.
-        // Only needs to hold the protocol header plus one (possibly partial)
-        // DATA_BUF record, since records are parsed and discarded incrementally.
-        static const size_t MAX_RESP_SIZE = 4096;
+        // Sized to hold a full raw spectrum (~4KB + header) as well as the
+        // bounded streaming DATA_BUF window.
+        static const size_t MAX_RESP_SIZE = 8192;
         static uint8_t _resp_buffer[MAX_RESP_SIZE];
         size_t _buf_len;       // valid bytes currently buffered at _resp_buffer[0]
         size_t _resp_received; // total bytes received for the current response

@@ -30,8 +30,8 @@
 class BytesBuffer
 {
     public:
-        // Define a larger buffer size to match the BLE transport
-        static const size_t MAX_BUFFER_SIZE = 4096; // Increased to 4KB
+        // Define a buffer size large enough for a full raw spectrum read
+        static const size_t MAX_BUFFER_SIZE = 8192;
         
         BytesBuffer(void);
         BytesBuffer(const uint8_t* data, size_t length);
