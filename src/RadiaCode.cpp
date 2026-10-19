@@ -96,8 +96,12 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
             setLocalTime(timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900, 
                 timeinfo->tm_sec, timeinfo->tm_min, timeinfo->tm_hour);
         }
-        // Calculate base time (current time + 128 seconds)
-        _base_time_sec = now + 128;
+        // Base time for timestamping records. The python library adds a fixed
+        // +128s compensation, but that overcorrects on this device (live record
+        // timestamps came out ~125s ahead of the host clock). The device clock
+        // is only a couple seconds off, so no fixed offset is needed: live
+        // records timestamp to ~now, matching the GPS/system clock.
+        _base_time_sec = now;
     }
 
     deviceTime(0);
