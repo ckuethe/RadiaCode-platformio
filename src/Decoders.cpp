@@ -306,7 +306,9 @@ DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* con
         return nullptr;
     }
 
-    uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000;
+    // The device timestamps DATA_BUF records ~128s in the past relative to its
+    // "now", so compensate with the +128s the reference library applies.
+    uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000 + 128;
 
     DataItem* item = nullptr;
 
