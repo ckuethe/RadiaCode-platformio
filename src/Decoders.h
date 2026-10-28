@@ -29,17 +29,17 @@
 
 // Decode a single DATA_BUF record from the front of the buffer.
 //
-// On success *consumed is set to true and the return value is a heap-allocated
-// DataItem (which may be nullptr for record types that carry no useful data but
-// must still be skipped).  The caller owns and must delete any non-null return.
+// The decoded records are appended to `out` (the caller owns and must delete
+// the heap-allocated DataItems).  Multi-sample groups (eid==1) are expanded so
+// each sample becomes its own record, matching the python reference decoder.
 //
-// If the buffer does not yet hold a complete record, or the record type is not
-// recognized, *consumed is set to false, the buffer position is left unchanged
-// and nullptr is returned so the caller can wait for more bytes or stop.
-DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* consumed);
+// Returns the number of bytes consumed (0 if the buffer does not yet hold a
+// complete record, or the record type is not recognized).  When 0 is returned
+// the buffer position is left unchanged so the caller can wait for more bytes
+// or stop.
+size_t decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, std::vector<DataItem*>& out);
 
-// Decode a whole DATA_BUF buffer into a list of DataItems (backwards-compatible
-// wrapper around decodeDataBufRecord).
+// Decode a whole DATA_BUF buffer into a flat list of DataItems.
 std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec);
 
 // Decode spectrum data directly into an existing Spectrum object

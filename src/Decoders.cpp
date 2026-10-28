@@ -280,19 +280,51 @@ void decodeSpectrum(BytesBuffer& br, uint8_t format_version, Spectrum& spectrum)
     }
 }
 
-// Payload sizes (bytes after the 7-byte header) for eid==0 records, keyed by gid.
-// These come from the authoritative python decoder: '<ffHHHB', '<ff', '<IffHH',
-// '<IfHHH', '<IffHH', '<IffHH', '<HHH', '<BBH', '<fH', '<fH'.
-static const uint8_t gid0_payload_size[10] = {15, 8, 16, 14, 16, 16, 6, 4, 6, 6};
+// Payload sizes (bytes after the 7-byte header) for single-sample records,
+// keyed by gid.  These come from the authoritative python decoder:
+// gid 0 '<ffHHHB'(15), 1 '<ff'(8), 2 '<IffHH'(16), 3 '<IfHHH'(14), 4 '<IH'(6).
+static const uint8_t gid0_single_payload[5] = {15, 8, 16, 14, 6};
+// Per-sample payload size for multi-sample groups (eid==1), keyed by gid:
+// 1 '<ff'(8), 2 '<IffHH'(16), 3 '<IfHHH'(14), 4 '<IH'(6).
+static const uint8_t gid1_sample_payload[5] = {0, 8, 16, 14, 6};
 
-DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* consumed)
+// Alarm / off-scale events carry an extra rate + error field after the usual
+// event header (ev, mask, flags).  Count-rate events carry a count rate, the
+// others carry a dose rate.  Matches the python reference decoder.
+static bool isRateEvent(uint8_t event)
 {
-    *consumed = false;
+    switch (event)
+    {
+    case 9:   // DOSE_RATE_ALARM1
+    case 10:  // DOSE_RATE_ALARM2
+    case 11:  // DOSE_RATE_OFFSCALE
+    case 12:  // DOSE_ALARM1
+    case 13:  // DOSE_ALARM2
+    case 14:  // DOSE_OFFSCALE
+    case 20:  // COUNT_RATE_ALARM1
+    case 21:  // COUNT_RATE_ALARM2
+    case 22:  // COUNT_RATE_OFFSCALE
+        return true;
+    default:
+        return false;
+    }
+}
 
+static bool isCountRateEvent(uint8_t event)
+{
+    return (event == 20) || (event == 21) || (event == 22);
+}
+
+// Need at least `bytes` more bytes than the record header; bail cleanly if not.
+#define REC_NEED(bytes) \
+    do { if (br.available() < (bytes)) { br.setPosition(rec_pos); return 0; } } while (0)
+
+size_t decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, std::vector<DataItem*>& out)
+{
     // We need at least the 7-byte record header before we can do anything.
     if (br.available() < 7)
     {
-        return nullptr;
+        return 0;
     }
 
     size_t rec_pos = br.getPosition();
@@ -303,30 +335,20 @@ DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* con
         !br.readInt32(&ts_offset))
     {
         br.setPosition(rec_pos);
-        return nullptr;
+        return 0;
     }
 
     // The device timestamps DATA_BUF records ~128s in the past relative to its
-    // "now", so compensate with the +128s the reference library applies.
+    // "now", so compensate with +128s.
     uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000 + 128;
 
-    DataItem* item = nullptr;
-
-    if (eid == 0 && gid <= 9)
+    if (eid == 0)
     {
-        size_t payload = gid0_payload_size[gid];
-        // Bounds check: don't read a partial record (this is what used to cause
-        // "Buffer overflow prevented" warnings and garbage "Unknown data type" logs).
-        if (br.available() < payload)
-        {
-            br.setPosition(rec_pos);
-            return nullptr;
-        }
-
         switch (gid)
         {
-        case 0: // GRP_RealTimeData
+        case 0: // GRP_RealTimeData '<ffHHHB' (15 bytes)
         {
+            REC_NEED(15);
             RealTimeData* data = new RealTimeData();
             data->timestamp = timestamp;
             uint16_t cr_err, dr_err;
@@ -336,28 +358,30 @@ DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* con
             {
                 delete data;
                 br.setPosition(rec_pos);
-                return nullptr;
+                return 0;
             }
             data->count_rate_err = cr_err / 10.0f;
             data->dose_rate_err = dr_err / 10.0f;
-            item = data;
-            break;
+            out.push_back(data);
+            return 7 + 15;
         }
-        case 1: // GRP_RawData
+        case 1: // GRP_RawData '<ff' (8 bytes)
         {
+            REC_NEED(8);
             RawData* data = new RawData();
             data->timestamp = timestamp;
             if (!br.readFloat(&data->count_rate) || !br.readFloat(&data->dose_rate))
             {
                 delete data;
                 br.setPosition(rec_pos);
-                return nullptr;
+                return 0;
             }
-            item = data;
-            break;
+            out.push_back(data);
+            return 7 + 8;
         }
-        case 2: // GRP_DoseRateDB
+        case 2: // GRP_DoseRateDB '<IffHH' (16 bytes)
         {
+            REC_NEED(16);
             DoseRateDB* data = new DoseRateDB();
             data->timestamp = timestamp;
             uint16_t dr_err;
@@ -367,14 +391,15 @@ DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* con
             {
                 delete data;
                 br.setPosition(rec_pos);
-                return nullptr;
+                return 0;
             }
             data->dose_rate_err = dr_err / 10.0f;
-            item = data;
-            break;
+            out.push_back(data);
+            return 7 + 16;
         }
-        case 3: // GRP_RareData
+        case 3: // GRP_RareData '<IfHHH' (14 bytes)
         {
+            REC_NEED(14);
             RareData* data = new RareData();
             data->timestamp = timestamp;
             uint16_t temperature_raw, charge_raw;
@@ -384,59 +409,82 @@ DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* con
             {
                 delete data;
                 br.setPosition(rec_pos);
-                return nullptr;
+                return 0;
             }
             data->temperature = (temperature_raw - 2000) / 100.0f;
             data->charge_level = charge_raw / 100.0f;
-            item = data;
-            break;
+            out.push_back(data);
+            return 7 + 14;
         }
-        case 4: // GRP_UserData
-        case 5: // GRP_ScheduleData
+        case 4: // GRP_DoseCounter '<IH' (6 bytes)
         {
-            // Consume but discard; these carry configuration/schedule info.
-            uint32_t count; float cr, dr; uint16_t err, fl;
-            if (!br.readUint32(&count) || !br.readFloat(&cr) || !br.readFloat(&dr) ||
-                !br.readUint16(&err) || !br.readUint16(&fl))
-            {
-                br.setPosition(rec_pos);
-                return nullptr;
-            }
-            item = nullptr;
-            break;
-        }
-        case 6: // GRP_AccelData
-        {
-            uint16_t ax, ay, az;
-            if (!br.readUint16(&ax) || !br.readUint16(&ay) || !br.readUint16(&az))
-            {
-                br.setPosition(rec_pos);
-                return nullptr;
-            }
-            item = nullptr;
-            break;
-        }
-        case 7: // GRP_Event
-        {
-            Event* data = new Event();
+            REC_NEED(6);
+            DoseCounter* data = new DoseCounter();
             data->timestamp = timestamp;
-            uint8_t event_id, param1; uint16_t fl;
-            if (!br.readUint8(&event_id) || !br.readUint8(&param1) || !br.readUint16(&fl))
+            if (!br.readUint32(&data->dose_counter) || !br.readUint16(&data->flags))
             {
                 delete data;
                 br.setPosition(rec_pos);
-                return nullptr;
+                return 0;
             }
+            out.push_back(data);
+            return 7 + 6;
+        }
+        case 5: // GRP_ScheduleData '<IffHH' (16 bytes) - consume but discard
+        case 6: // GRP_AccelData '<HHH' (6 bytes) - consume but discard
+        {
+            size_t payload = (gid == 5) ? 16 : 6;
+            REC_NEED(payload);
+            br.setPosition(br.getPosition() + payload);
+            return 7 + payload;
+        }
+        case 7: // GRP_Event '<BBH[+fH]' (4 or 10 bytes)
+        {
+            // Need the base header first to know whether a rate payload follows.
+            REC_NEED(4);
+            uint8_t event_id, param1; uint16_t fl;
+            if (!br.readUint8(&event_id) || !br.readUint8(&param1) || !br.readUint16(&fl))
+            {
+                br.setPosition(rec_pos);
+                return 0;
+            }
+            Event* data = new Event();
+            data->timestamp = timestamp;
             data->event = static_cast<EventId>(event_id);
             data->event_param1 = param1;
             data->flags = fl;
-            item = data;
-            break;
+            if (isRateEvent(event_id))
+            {
+                REC_NEED(6);
+                float rate; uint16_t rate_err;
+                if (!br.readFloat(&rate) || !br.readUint16(&rate_err))
+                {
+                    delete data;
+                    br.setPosition(rec_pos);
+                    return 0;
+                }
+                if (isCountRateEvent(event_id))
+                {
+                    data->count_rate = rate;
+                    data->count_rate_err = rate_err / 10.0f;
+                    data->has_count_rate = true;
+                }
+                else
+                {
+                    data->dose_rate = rate;
+                    data->dose_rate_err = rate_err / 10.0f;
+                    data->has_dose_rate = true;
+                }
+                out.push_back(data);
+                return 7 + 4 + 6;
+            }
+            out.push_back(data);
+            return 7 + 4;
         }
-        case 8: // GRP_RawCountRate
-        case 9: // GRP_RawDoseRate
+        case 8: // GRP_RawCountRate '<fH' (6 bytes)
+        case 9: // GRP_RawDoseRate '<fH' (6 bytes)
         {
-            // Surface these as RawData so the proxy can log raw rates too.
+            REC_NEED(6);
             RawData* data = new RawData();
             data->timestamp = timestamp;
             float rate; uint16_t fl;
@@ -444,58 +492,123 @@ DataItem* decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, bool* con
             {
                 delete data;
                 br.setPosition(rec_pos);
-                return nullptr;
+                return 0;
             }
             data->count_rate = (gid == 8) ? rate : 0.0f;
             data->dose_rate = (gid == 9) ? rate : 0.0f;
-            item = data;
-            break;
+            out.push_back(data);
+            return 7 + 6;
         }
+        default:
+            br.setPosition(rec_pos);
+            return 0; // unknown eid==0 gid -> stop
         }
     }
     else if (eid == 1)
     {
-        // Variable-length records: [samples u16][time u32] then samples*granularity bytes.
+        // Multi-sample groups: [samples u16][time u32] then samples*granularity
+        // bytes.  Each sample is expanded into its own record, matching the
+        // python reference decoder.
         size_t granularity = 0;
-        if (gid == 1)      granularity = 8;
-        else if (gid == 2) granularity = 16;
-        else if (gid == 3) granularity = 14;
+        if (gid == 1)      granularity = 8;   // GRP_RawData
+        else if (gid == 2) granularity = 16;  // GRP_DoseRateDB
+        else if (gid == 3) granularity = 14;  // GRP_RareData
+        else if (gid == 4) granularity = 6;   // GRP_DoseCounter
         else
         {
             br.setPosition(rec_pos);
-            return nullptr; // unknown eid==1 gid -> stop
+            return 0; // unknown eid==1 gid -> stop
         }
 
+        // Validate the multi-block before decoding: a corrupt samples_num would
+        // otherwise greedily consume the rest of the buffer as samples.
         if (br.available() < 6)
         {
             br.setPosition(rec_pos);
-            return nullptr;
+            return 0;
         }
         uint16_t samples_num;
         uint32_t smpl_time_ms;
         if (!br.readUint16(&samples_num) || !br.readUint32(&smpl_time_ms))
         {
             br.setPosition(rec_pos);
-            return nullptr;
+            return 0;
         }
-        size_t skip = (size_t)samples_num * granularity;
-        if (br.available() < skip)
+        size_t body = (size_t)samples_num * granularity;
+        if (br.available() < body)
         {
             br.setPosition(rec_pos);
-            return nullptr;
+            return 0; // body does not fit -> malformed record
         }
-        br.setPosition(br.getPosition() + skip);
-        item = nullptr; // consumed but not kept
+
+        for (uint16_t i = 0; i < samples_num; i++)
+        {
+            if (gid == 1) // GRP_RawData
+            {
+                RawData* data = new RawData();
+                data->timestamp = timestamp;
+                if (!br.readFloat(&data->count_rate) || !br.readFloat(&data->dose_rate))
+                {
+                    delete data;
+                    br.setPosition(rec_pos);
+                    return 0;
+                }
+                out.push_back(data);
+            }
+            else if (gid == 2) // GRP_DoseRateDB
+            {
+                DoseRateDB* data = new DoseRateDB();
+                data->timestamp = timestamp;
+                uint16_t dr_err;
+                if (!br.readUint32(&data->count) || !br.readFloat(&data->count_rate) ||
+                    !br.readFloat(&data->dose_rate) || !br.readUint16(&dr_err) ||
+                    !br.readUint16(&data->flags))
+                {
+                    delete data;
+                    br.setPosition(rec_pos);
+                    return 0;
+                }
+                data->dose_rate_err = dr_err / 10.0f;
+                out.push_back(data);
+            }
+            else if (gid == 3) // GRP_RareData
+            {
+                RareData* data = new RareData();
+                data->timestamp = timestamp;
+                uint16_t temperature_raw, charge_raw;
+                if (!br.readUint32(&data->duration) || !br.readFloat(&data->dose) ||
+                    !br.readUint16(&temperature_raw) || !br.readUint16(&charge_raw) ||
+                    !br.readUint16(&data->flags))
+                {
+                    delete data;
+                    br.setPosition(rec_pos);
+                    return 0;
+                }
+                data->temperature = (temperature_raw - 2000) / 100.0f;
+                data->charge_level = charge_raw / 100.0f;
+                out.push_back(data);
+            }
+            else if (gid == 4) // GRP_DoseCounter
+            {
+                DoseCounter* data = new DoseCounter();
+                data->timestamp = timestamp;
+                if (!br.readUint32(&data->dose_counter) || !br.readUint16(&data->flags))
+                {
+                    delete data;
+                    br.setPosition(rec_pos);
+                    return 0;
+                }
+                out.push_back(data);
+            }
+        }
+        return 7 + 6 + body;
     }
     else
     {
         // Unknown eid/gid combination.
         br.setPosition(rec_pos);
-        return nullptr;
+        return 0;
     }
-
-    *consumed = true;
-    return item;
 }
 
 std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
@@ -504,15 +617,10 @@ std::vector<DataItem*> decodeDataBuf(BytesBuffer& br, uint32_t base_time_sec)
 
     while (true)
     {
-        bool consumed = false;
-        DataItem* item = decodeDataBufRecord(br, base_time_sec, &consumed);
-        if (!consumed)
+        size_t consumed = decodeDataBufRecord(br, base_time_sec, ret);
+        if (consumed == 0)
         {
             break; // need more data or hit an unknown record type
-        }
-        if (item != nullptr)
-        {
-            ret.push_back(item);
         }
     }
 

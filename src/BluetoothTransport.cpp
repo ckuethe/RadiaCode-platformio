@@ -433,24 +433,22 @@ void BluetoothTransport::parseAvailableRecords(void)
     while (_buf_len > 0)
     {
         BytesBuffer br(_resp_buffer, _buf_len);
-        bool consumed = false;
-        DataItem* item = decodeDataBufRecord(br, _base_time_sec, &consumed);
-        if (!consumed)
+        std::vector<DataItem*> items;
+        size_t consumed_bytes = decodeDataBufRecord(br, _base_time_sec, items);
+        if (consumed_bytes == 0)
         {
             break; // need more data, or hit an unknown record type
         }
 
-        size_t consumed_bytes = br.getPosition();
-        if (consumed_bytes == 0)
+        for (DataItem* item : items)
         {
-            break; // safety: no progress
-        }
-        if (item != nullptr)
-        {
-            _parsed_records.push_back(item);
+            if (item != nullptr)
+            {
+                _parsed_records.push_back(item);
+            }
         }
 
-        // Discard the consumed record from the front of the buffer.
+        // Discard the consumed record(s) from the front of the buffer.
         memmove(_resp_buffer, _resp_buffer + consumed_bytes, _buf_len - consumed_bytes);
         _buf_len -= consumed_bytes;
     }

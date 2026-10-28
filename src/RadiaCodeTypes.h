@@ -267,7 +267,8 @@ enum DataItemType
     TYPE_RAW_DATA       = 2,
     TYPE_DOSE_RATE_DB   = 3,
     TYPE_RARE_DATA      = 4,
-    TYPE_EVENT          = 5
+    TYPE_EVENT          = 5,
+    TYPE_DOSE_COUNTER   = 6
 };
 
 class DataItem
@@ -320,6 +321,14 @@ class RareData : public DataItem
         uint16_t flags;
 };
 
+class DoseCounter : public DataItem
+{
+    public:
+        DoseCounter() { type = TYPE_DOSE_COUNTER; }
+        uint32_t dose_counter;
+        uint16_t flags;
+};
+
 class Event : public DataItem
 {
     public:
@@ -327,6 +336,15 @@ class Event : public DataItem
         EventId event;
         uint8_t event_param1;
         uint16_t flags;
+        // Alarm / off-scale events carry the rate that triggered them. Only one
+        // of the (count_rate, dose_rate) pairs is populated, matching the
+        // python reference decoder.
+        float count_rate = 0.0f;
+        float count_rate_err = 0.0f;
+        bool has_count_rate = false;
+        float dose_rate = 0.0f;
+        float dose_rate_err = 0.0f;
+        bool has_dose_rate = false;
 };
 
 struct Spectrum
