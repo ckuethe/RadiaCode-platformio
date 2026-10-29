@@ -96,10 +96,10 @@ RadiaCode::RadiaCode(const char* bluetooth_mac, bool ignore_firmware_compatibili
             setLocalTime(timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900, 
                 timeinfo->tm_sec, timeinfo->tm_min, timeinfo->tm_hour);
         }
-        // Base time for timestamping records. The device reports DATA_BUF
-        // records ~128s behind its current time, so decodeDataBufRecord()
-        // applies a +128s compensation. _base_time_sec is the host "now" at
-        // connect; record timestamps then track the host clock.
+        // Base time for timestamping DATA_BUF records. The device's ts_offset
+        // grows over the session (it is relative to connect time), so the base
+        // is fixed to host "now" at connect; decodeDataBufRecord() applies a
+        // +128s correction to live RealTimeData records only.
         _base_time_sec = now;
     }
 

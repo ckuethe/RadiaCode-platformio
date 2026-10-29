@@ -338,9 +338,22 @@ size_t decodeDataBufRecord(BytesBuffer& br, uint32_t base_time_sec, std::vector<
         return 0;
     }
 
-    // The device timestamps DATA_BUF records ~128s in the past relative to its
-    // "now", so compensate with +128s.
-    uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000 + 128;
+    // The device's ts_offset grows over the session (it is relative to connect
+    // time), so base_time_sec is the host "now" at connect, fixed for the whole
+    // session. This is NOT refreshed per read: refreshing added the elapsed
+    // session time to every record, drifting all timestamps forward.
+    uint32_t timestamp = base_time_sec + (ts_offset * 10) / 1000;
+
+    // Firmware quirk: the device timestamps live RealTimeData (gid 0) records
+    // ~128s in the past relative to its current time, so gid 0 needs a +128s
+    // correction (this is what makes `radiacode mon` track the host clock).
+    // Every other record type is timestamped at its capture time and must NOT
+    // be shifted - applying the blanket +128 overcorrected raw/db/dc/rare by
+    // ~47-129s.
+    if (eid == 0 && gid == 0)
+    {
+        timestamp += 128;
+    }
 
     if (eid == 0)
     {
